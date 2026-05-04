@@ -27,6 +27,10 @@
         _indicator_drag    = nil,  -- offset Vector2 while dragging
         _indicator_drag_origin = nil,  -- pos at drag-start, used to detect real-move vs bare-click
         _indicator_drag_end_cb = nil,  -- fn(pos) called after drag release with movement
+        -- secondary indicator row stacked below primary, same pill style
+        _indicator2_enabled = false,
+        _indicator2_label   = "",
+        _indicator2_active  = false,
         _notifications = {},
         _notifications_spawned = 0,
         _open_tab = nil,
@@ -1177,6 +1181,13 @@
             self._indicator_active  = active == true
         end
 
+        -- secondary pill row, same style as primary, stacked underneath
+        function UILib:UpdateIndicator2(enabled, label, active)
+            self._indicator2_enabled = enabled == true
+            self._indicator2_label   = label or ""
+            self._indicator2_active  = active == true
+        end
+
         -- pos: Vector2 / {x,y} table / nil (nil = reset to top-center default)
         function UILib:SetIndicatorPosition(pos)
             if pos == nil then
@@ -1818,6 +1829,7 @@
             self._active_dropdown = nil
             self._active_colorpicker = nil
             self._indicator_enabled = false
+            self._indicator2_enabled = false
             self._indicator_drag = nil
             self._indicator_drag_origin = nil
             self._indicator_drag_end_cb = nil
@@ -2025,6 +2037,30 @@
                 self:_Draw('indicator_dot', 'circle', indDotCol, 108, indDotCenter, 2, true, 1, 18)
                 -- label
                 self:_Draw('indicator_text', 'text', indTextCol, 108, indPos + Vector2.new(self._padding + 12, self._padding/2), indLabel, true, nil, 13)
+
+                -- secondary pill stacked below primary, same style
+                if self._indicator2_enabled then
+                    local ind2Label = self._indicator2_label ~= '' and self._indicator2_label or 'STATUS'
+                    local ind2Active = self._indicator2_active
+                    local ind2TextSize = self:_GetTextBounds(ind2Label, nil, 13)
+                    local ind2W = ind2TextSize.x + self._padding * 2 + 14
+                    local ind2H = ind2TextSize.y + self._padding + 2
+                    local ind2Pos = indPos + Vector2.new(0, indH + 4)
+
+                    local ind2BorderCol = ind2Active and self._theming.accent or self._theming.border1
+                    local ind2DotCol    = ind2Active and self._theming.accent or self._theming.subtext
+                    local ind2TextCol   = ind2Active and self._theming.text   or self._theming.subtext
+                    self:_Draw('indicator2_body', 'rect', self._theming.body, 105, ind2Pos, Vector2.new(ind2W, ind2H), true)
+                    self:_SetOpacity('indicator2_body', clamp(self._background_alpha + 0.02, 5/100, 1))
+                    self:_Draw('indicator2_crust', 'rect', self._theming.crust, 106, ind2Pos, Vector2.new(ind2W, ind2H), false)
+                    self:_Draw('indicator2_border', 'rect', ind2BorderCol, 106, ind2Pos + Vector2.new(1, 1), Vector2.new(ind2W, ind2H) - Vector2.new(2, 2), false)
+                    local ind2DotCenter = ind2Pos + Vector2.new(self._padding + 1, ind2H / 2 + 1)
+                    self:_Draw('indicator2_dot_ring', 'circle', self._theming.border1, 107, ind2DotCenter, 5, false, 1, 18)
+                    self:_Draw('indicator2_dot', 'circle', ind2DotCol, 108, ind2DotCenter, 2, true, 1, 18)
+                    self:_Draw('indicator2_text', 'text', ind2TextCol, 108, ind2Pos + Vector2.new(self._padding + 12, self._padding/2), ind2Label, true, nil, 13)
+                else
+                    self:_UndrawStartsWith('indicator2_')
+                end
             else
                 self:_UndrawStartsWith('indicator_')
                 self._indicator_drag = nil
@@ -2207,12 +2243,12 @@
                             and ('next ' .. tostring(math.min(maxVisible, remaining)) .. ' →')
                             or '← back to start'
                         local moreOrigin = Vector2.new(dropdownOrigin.x + self._padding, dropdownOrigin.y + totalHeight)
-                        local moreSize = self:_GetTextBounds(moreText, nil, 11)
+                        local moreSize = self:_GetTextBounds(moreText, Drawing.Fonts.SystemBold, 11)
                         local moreHitOrigin = Vector2.new(moreOrigin.x - 4, moreOrigin.y - self._padding/2)
                         local moreHitSize = Vector2.new(dropdown.width + 8, moreSize.y + self._padding)
                         local isHoveringMore = self:_IsMouseWithinBounds(moreHitOrigin, moreHitSize)
                         local moreColor = isHoveringMore and self._theming.text or self._theming.subtext
-                        self:_Draw('dropdown_more', 'text', moreColor, 902, moreOrigin, moreText, true, 'left', 11)
+                        self:_Draw('dropdown_more', 'text', moreColor, 902, moreOrigin, moreText, true, 'left', 11, Drawing.Fonts.SystemBold)
                         if isHoveringMore and clickFrame then
                             dropdown._page_offset = hasNext and visibleEnd or 0
                             shouldCancel = false
@@ -2376,8 +2412,8 @@
 
                     -- hex code below preview
                     local hex = string.format('#%02X%02X%02X', math.floor(newColor.R * 255 + 0.5), math.floor(newColor.G * 255 + 0.5), math.floor(newColor.B * 255 + 0.5))
-                    local hexSize = self:_GetTextBounds(hex, nil, 11)
-                    self:_Draw('colorpicker_hex', 'text', self._theming.subtext, 905, Vector2.new(previewPos.x + previewSize.x - hexSize.x, previewPos.y + previewSize.y + 4), hex, true, 'left', 11)
+                    local hexSize = self:_GetTextBounds(hex, Drawing.Fonts.SystemBold, 11)
+                    self:_Draw('colorpicker_hex', 'text', self._theming.subtext, 905, Vector2.new(previewPos.x + previewSize.x - hexSize.x, previewPos.y + previewSize.y + 4), hex, true, 'left', 11, Drawing.Fonts.SystemBold)
 
                     if clickFrame and shouldCancel then
                         self:_RemoveColorpicker()
@@ -2745,7 +2781,7 @@
 
                         if layout.headerText then
                             local headerTextColor = groupActive and self._theming.text or self._theming.subtext
-                            local headerTextSize = self:_GetTextBounds(layout.headerText, nil, 10)
+                            local headerTextSize = self:_GetTextBounds(layout.headerText, Drawing.Fonts.SystemBold, 10)
                             local headerTextX = bracketX + 10
                             local headerLineLeftToX = headerTextX - 4
                             local headerLineRightFromX = headerTextX + headerTextSize.x + 6
@@ -2756,7 +2792,7 @@
                             else
                                 self:_Undraw(tabDrawId .. '_group_header_r')
                             end
-                            self:_Draw(tabDrawId .. '_group_title', 'text', headerTextColor, 11, Vector2.new(headerTextX, bracketTopY - 7), layout.headerText, true, 'left', 10)
+                            self:_Draw(tabDrawId .. '_group_title', 'text', headerTextColor, 11, Vector2.new(headerTextX, bracketTopY - 7), layout.headerText, true, 'left', 10, Drawing.Fonts.SystemBold)
                             self:_Undraw(tabDrawId .. '_group_top')
                         else
                             self:_Undraw(tabDrawId .. '_group_header_l')
@@ -2806,7 +2842,7 @@
                 -- "+N more" sidebar indicator if tabs overflow
                 if tabCount > visibleTabCount then
                     local moreText = '+' .. tostring(tabCount - visibleTabCount) .. ' more'
-                    self:_Draw('menu_sidebar_more', 'text', self._theming.subtext, 11, Vector2.new(sidebarPos.x + 14, tabAreaEndY - 4), moreText, true, 'left', 10)
+                    self:_Draw('menu_sidebar_more', 'text', self._theming.subtext, 11, Vector2.new(sidebarPos.x + 14, tabAreaEndY - 4), moreText, true, 'left', 10, Drawing.Fonts.SystemBold)
                 else
                     self:_Undraw('menu_sidebar_more')
                 end
@@ -2867,14 +2903,14 @@
 
                         -- section header: upper label + divider line
                         local headerText = string.upper(sectionName)
-                        local headerSize = self:_GetTextBounds(headerText, nil, 11)
+                        local headerSize = self:_GetTextBounds(headerText, Drawing.Fonts.SystemBold, 11)
                         for col = 1, totalColumns do
                             local sectionColumnDrawId = sectionDrawId .. '_c' .. tostring(col)
                             if sectionUsedColumns[col] then
                                 local widgetX = columnX[col]
                                 local cursorY = columnCursorY[col] + (tonumber(sectionContent._y_offset) or 0)
                                 if cursorY + headerSize.y < contentBottom then
-                                    self:_Draw(sectionColumnDrawId .. '_title', 'text', self._theming.subtext, 12, Vector2.new(widgetX, cursorY), headerText, true, 'left', 11)
+                                    self:_Draw(sectionColumnDrawId .. '_title', 'text', self._theming.subtext, 12, Vector2.new(widgetX, cursorY), headerText, true, 'left', 11, Drawing.Fonts.SystemBold)
                                     local lineY = cursorY + math.floor(headerSize.y / 2) - 1
                                     self:_Draw(sectionColumnDrawId .. '_line', 'line', self._theming.border1, 12, Vector2.new(widgetX + headerSize.x + 8, lineY), Vector2.new(widgetX + widgetW, lineY), 1)
                                 else
@@ -3112,7 +3148,7 @@
                                 local labelSize = self:_GetTextBounds(truncatedLabel)
                                 if sectionItem.tooltip then
                                     local hintPos = Vector2.new(labelPos.x + labelSize.x + 6, labelPos.y + 1)
-                                    local hintSize = self:_GetTextBounds('?', nil, 11)
+                                    local hintSize = self:_GetTextBounds('?', Drawing.Fonts.SystemBold, 11)
                                     local hitboxPad = 4
                                     local hintHit = Vector2.new(hintPos.x - hitboxPad, hintPos.y - hitboxPad)
                                     local hintHitSize = Vector2.new(hintSize.x + hitboxPad * 2 + 6, hintSize.y + hitboxPad * 2)
@@ -3124,7 +3160,7 @@
                                     end
                                     self:_Draw(sectionItemId .. '_hint_bg', 'rect', self._theming.surface1, 12, hintPos + Vector2.new(-2, 0), Vector2.new(hintSize.x + 4, hintSize.y + 2), true)
                                     self:_Draw(sectionItemId .. '_hint_border', 'rect', self._theming.border0, 13, hintPos + Vector2.new(-2, 0), Vector2.new(hintSize.x + 4, hintSize.y + 2), false)
-                                    self:_Draw(sectionItemId .. '_hint', 'text', self._theming.text, 14, hintPos, '?', true, 'left', 11)
+                                    self:_Draw(sectionItemId .. '_hint', 'text', self._theming.text, 14, hintPos, '?', true, 'left', 11, Drawing.Fonts.SystemBold)
                                 end
 
                                 self:_Draw(sectionItemId .. '_label', 'text', labelColor, 12, labelPos, truncatedLabel, true)
@@ -3597,10 +3633,10 @@
                     -- overflow indicator
                     if furthestCursorY > contentBottom then
                         local hintText = '▼ more'
-                        local hintSize = self:_GetTextBounds(hintText, nil, 10)
+                        local hintSize = self:_GetTextBounds(hintText, Drawing.Fonts.SystemBold, 10)
                         local hintX = contentX + contentW - hintSize.x - 8
                         local hintY = contentY + contentH - 14
-                        self:_Draw('menu_overflow_hint', 'text', self._theming.subtext, 18, Vector2.new(hintX, hintY), hintText, true, 'left', 10)
+                        self:_Draw('menu_overflow_hint', 'text', self._theming.subtext, 18, Vector2.new(hintX, hintY), hintText, true, 'left', 10, Drawing.Fonts.SystemBold)
                     else
                         self:_Undraw('menu_overflow_hint')
                     end
