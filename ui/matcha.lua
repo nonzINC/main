@@ -1995,15 +1995,30 @@
                     indPos = Vector2.new(math.floor(indMaxX / 2), 8)
                 end
 
-                -- drag handling (start when clicked inside, no other drag active)
+                -- pre-compute secondary pill dims once so drag hit-test and render share them
+                local ind2Label, ind2W, ind2H, ind2Pos
+                if self._indicator2_enabled then
+                    ind2Label = self._indicator2_label ~= '' and self._indicator2_label or 'STATUS'
+                    local ind2TextSize = self:_GetTextBounds(ind2Label, nil, 13)
+                    ind2W = ind2TextSize.x + self._padding * 2 + 14
+                    ind2H = ind2TextSize.y + self._padding + 2
+                end
+
+                -- drag handling (start when clicked inside either pill, no other drag active)
                 local indMousePos = self:_GetMousePos()
                 local indMouseHeld = self:_IsKeyHeld('m1')
                 local indClickFrame = self:_IsKeyPressed('m1')
-                if indClickFrame and not self._indicator_drag and not self._menu_drag and not self._slider_drag and not self._range_slider_drag
-                   and self:_IsMouseWithinBounds(indPos, Vector2.new(indW, indH)) then
-                    -- cache start pos so drag-end can detect a real move vs a bare click
-                    self._indicator_drag = Vector2.new(indMousePos.x - indPos.x, indMousePos.y - indPos.y)
-                    self._indicator_drag_origin = indPos
+                if indClickFrame and not self._indicator_drag and not self._menu_drag and not self._slider_drag and not self._range_slider_drag then
+                    local hitPrimary = self:_IsMouseWithinBounds(indPos, Vector2.new(indW, indH))
+                    local hitSecondary = false
+                    if self._indicator2_enabled then
+                        hitSecondary = self:_IsMouseWithinBounds(indPos + Vector2.new(0, indH + 4), Vector2.new(ind2W, ind2H))
+                    end
+                    if hitPrimary or hitSecondary then
+                        -- cache start pos so drag-end can detect a real move vs a bare click
+                        self._indicator_drag = Vector2.new(indMousePos.x - indPos.x, indMousePos.y - indPos.y)
+                        self._indicator_drag_origin = indPos
+                    end
                 end
                 if indMouseHeld and self._indicator_drag then
                     local nx = clamp(indMousePos.x - self._indicator_drag.x, 0, indMaxX)
@@ -2038,14 +2053,10 @@
                 -- label
                 self:_Draw('indicator_text', 'text', indTextCol, 108, indPos + Vector2.new(self._padding + 12, self._padding/2), indLabel, true, nil, 13)
 
-                -- secondary pill stacked below primary, same style
+                -- secondary pill stacked below primary, same style (dims pre-computed above)
                 if self._indicator2_enabled then
-                    local ind2Label = self._indicator2_label ~= '' and self._indicator2_label or 'STATUS'
                     local ind2Active = self._indicator2_active
-                    local ind2TextSize = self:_GetTextBounds(ind2Label, nil, 13)
-                    local ind2W = ind2TextSize.x + self._padding * 2 + 14
-                    local ind2H = ind2TextSize.y + self._padding + 2
-                    local ind2Pos = indPos + Vector2.new(0, indH + 4)
+                    ind2Pos = indPos + Vector2.new(0, indH + 4)
 
                     local ind2BorderCol = ind2Active and self._theming.accent or self._theming.border1
                     local ind2DotCol    = ind2Active and self._theming.accent or self._theming.subtext
