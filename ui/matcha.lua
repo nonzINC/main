@@ -1749,7 +1749,7 @@
                 local function updateGlowSliderVisibility(mode)
                     local isS = mode == 'Static'
                     local isB = mode == 'Breathe'
-                    local isR = mode == 'Rotate'
+                    local isR = mode == 'Rotate' or mode == 'Test.Rotate'
                     glowSIntensity:SetHidden(not isS)
                     glowSRadius:SetHidden(not isS)
                     glowBSpeed:SetHidden(not isB)
@@ -1761,7 +1761,7 @@
                     glowRIntensity:SetHidden(not isR)
                 end
 
-                glowSection:Dropdown('Glow animation', {self._glow_mode}, {'Static', 'Breathe', 'Rotate'}, false, function(newValue)
+                glowSection:Dropdown('Glow animation', {self._glow_mode}, {'Static', 'Breathe', 'Rotate', 'Test.Rotate'}, false, function(newValue)
                     if newValue and newValue[1] then
                         self._glow_mode = newValue[1]
                         updateGlowSliderVisibility(newValue[1])
@@ -2525,6 +2525,114 @@
                             self:_Undraw('menu_glow_r' .. tostring(i))
                         end
                         self._glow_rot_count = segCount
+                    elseif glowMode == 'Test.Rotate' then
+                        -- rounded rotate: 4 straights + 4 corner arcs follow body rounding
+                        local glowPeak = (self._glow_r_intensity or 50) / 100
+                        local layers = self._glow_r_radius or 9
+                        local segsStraight = 18
+                        local segsCorner = 8
+                        local totalSegs = 4 * (segsStraight + segsCorner)
+                        local speed = self._glow_r_speed or 3
+                        local wormW = (self._glow_r_worm or 40) / 200
+                        if wormW < 0.05 then wormW = 0.05 end
+                        local phase = ((now * speed) % 6.28318) / 6.28318
+                        local segCount = 0
+                        local m_cos, m_sin, m_floor = math.cos, math.sin, math.floor
+                        local HALF_PI = 1.5707963
+
+                        for gi = 1, layers do
+                            local layerAlpha = (1 - (gi - 1) / layers) * glowPeak
+                            local cr = bodyCorner + gi
+                            local maxCr = m_floor(((mw + gi * 2) < (mh + gi * 2) and (mw + gi * 2) or (mh + gi * 2)) / 2)
+                            if cr > maxCr then cr = maxCr end
+                            if cr < 0 then cr = 0 end
+                            local sw = (mw + gi * 2) - 2 * cr
+                            local sh = (mh + gi * 2) - 2 * cr
+                            if sw < 0 then sw = 0 end
+                            if sh < 0 then sh = 0 end
+                            local segWlen = sw / segsStraight
+                            local segHlen = sh / segsStraight
+
+                            local trCx, trCy = mx + mw + gi - cr, my - gi + cr
+                            local brCx, brCy = mx + mw + gi - cr, my + mh + gi - cr
+                            local blCx, blCy = mx - gi + cr,      my + mh + gi - cr
+                            local tlCx, tlCy = mx - gi + cr,      my - gi + cr
+
+                            for s = 0, totalSegs - 1 do
+                                segCount = segCount + 1
+                                local t = (s + 0.5) / totalSegs
+                                local rawDiff = t - phase
+                                if rawDiff > 0.5 then rawDiff = rawDiff - 1 end
+                                if rawDiff < -0.5 then rawDiff = rawDiff + 1 end
+                                local diff
+                                if rawDiff < 0 then
+                                    diff = -rawDiff / (wormW * 0.3)
+                                else
+                                    diff = rawDiff / wormW
+                                end
+                                local bright = 0.08 + 0.92 * ((diff < 1) and (1 - diff) * (1 - diff) or 0)
+
+                                local sx, sy, swPx, shPx
+                                local sect = s
+                                if sect < segsStraight then
+                                    sx = mx - gi + cr + sect * segWlen
+                                    sy = my - gi
+                                    swPx = m_floor(segWlen + 1)
+                                    shPx = 1
+                                elseif sect < segsStraight + segsCorner then
+                                    local k = (sect - segsStraight + 0.5) / segsCorner
+                                    local a = -HALF_PI + k * HALF_PI
+                                    sx = m_floor(trCx + m_cos(a) * cr + 0.5)
+                                    sy = m_floor(trCy + m_sin(a) * cr + 0.5)
+                                    swPx, shPx = 1, 1
+                                elseif sect < 2 * segsStraight + segsCorner then
+                                    local idx = sect - (segsStraight + segsCorner)
+                                    sx = mx + mw + gi - 1
+                                    sy = my - gi + cr + idx * segHlen
+                                    swPx = 1
+                                    shPx = m_floor(segHlen + 1)
+                                elseif sect < 2 * segsStraight + 2 * segsCorner then
+                                    local k = (sect - (2 * segsStraight + segsCorner) + 0.5) / segsCorner
+                                    local a = k * HALF_PI
+                                    sx = m_floor(brCx + m_cos(a) * cr + 0.5)
+                                    sy = m_floor(brCy + m_sin(a) * cr + 0.5)
+                                    swPx, shPx = 1, 1
+                                elseif sect < 3 * segsStraight + 2 * segsCorner then
+                                    local idx = sect - (2 * segsStraight + 2 * segsCorner)
+                                    sx = mx + mw + gi - cr - (idx + 1) * segWlen
+                                    sy = my + mh + gi - 1
+                                    swPx = m_floor(segWlen + 1)
+                                    shPx = 1
+                                elseif sect < 3 * segsStraight + 3 * segsCorner then
+                                    local k = (sect - (3 * segsStraight + 2 * segsCorner) + 0.5) / segsCorner
+                                    local a = HALF_PI + k * HALF_PI
+                                    sx = m_floor(blCx + m_cos(a) * cr + 0.5)
+                                    sy = m_floor(blCy + m_sin(a) * cr + 0.5)
+                                    swPx, shPx = 1, 1
+                                elseif sect < 4 * segsStraight + 3 * segsCorner then
+                                    local idx = sect - (3 * segsStraight + 3 * segsCorner)
+                                    sx = mx - gi
+                                    sy = my + mh + gi - cr - (idx + 1) * segHlen
+                                    swPx = 1
+                                    shPx = m_floor(segHlen + 1)
+                                else
+                                    local k = (sect - (4 * segsStraight + 3 * segsCorner) + 0.5) / segsCorner
+                                    local a = -3.14159 + k * HALF_PI
+                                    sx = m_floor(tlCx + m_cos(a) * cr + 0.5)
+                                    sy = m_floor(tlCy + m_sin(a) * cr + 0.5)
+                                    swPx, shPx = 1, 1
+                                end
+
+                                local sid = 'menu_glow_r' .. tostring(segCount)
+                                self:_Draw(sid, 'rect', glowColor, 0, Vector2.new(sx, sy), Vector2.new(swPx, shPx), true)
+                                self:_SetOpacity(sid, layerAlpha * bright)
+                            end
+                        end
+                        local prevMax = self._glow_rot_count or 0
+                        for i = segCount + 1, prevMax do
+                            self:_Undraw('menu_glow_r' .. tostring(i))
+                        end
+                        self._glow_rot_count = segCount
                     else
                         local effectiveRadius, glowPeak, peakMul, cornerSmooth
                         if glowMode == 'Static' then
@@ -2795,14 +2903,8 @@
                             local headerTextSize = self:_GetTextBounds(layout.headerText, Drawing.Fonts.SystemBold, 10)
                             local headerTextX = bracketX + 10
                             local headerLineLeftToX = headerTextX - 4
-                            local headerLineRightFromX = headerTextX + headerTextSize.x + 6
-                            local headerLineRightToX = btnPos.x + btnSize.x - 6
                             self:_Draw(tabDrawId .. '_group_header_l', 'line', bracketColor, 11, Vector2.new(bracketX, bracketTopY), Vector2.new(headerLineLeftToX, bracketTopY), 1)
-                            if headerLineRightToX > headerLineRightFromX then
-                                self:_Draw(tabDrawId .. '_group_header_r', 'line', bracketColor, 11, Vector2.new(headerLineRightFromX, bracketTopY), Vector2.new(headerLineRightToX, bracketTopY), 1)
-                            else
-                                self:_Undraw(tabDrawId .. '_group_header_r')
-                            end
+                            self:_Undraw(tabDrawId .. '_group_header_r')
                             self:_Draw(tabDrawId .. '_group_title', 'text', headerTextColor, 11, Vector2.new(headerTextX, bracketTopY - 7), layout.headerText, true, 'left', 10, Drawing.Fonts.SystemBold)
                             self:_Undraw(tabDrawId .. '_group_top')
                         else
